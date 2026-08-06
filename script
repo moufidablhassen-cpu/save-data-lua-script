@@ -1,0 +1,160 @@
+--  Optimized Full DataScript 
+
+local Players = game:GetService("Players")
+local DataStoreService = game:GetService("DataStoreService")
+local HttpService = game:GetService("HttpService")
+
+-- DataStore
+local MultiplierStore = DataStoreService:GetDataStore("Multiplier")
+local ReqPointsStore = DataStoreService:GetDataStore("ReqPoints")
+local OwnedTitlesStore = DataStoreService:GetDataStore("PlayerOwnedTitles")
+local EquippedTitleStore = DataStoreService:GetDataStore("EquippedTitle")
+local ClicksStore = DataStoreService:GetDataStore("PlayerClicks")
+local RebirthsStore = DataStoreService:GetDataStore("PlayerRebirths")
+
+-- Default
+local DEFAULT_MULTIPLIER = 1
+local DEFAULT_REQ_POINTS = 500
+local DEFAULT_TITLE = "No Title"
+
+Players.PlayerAdded:Connect(function(player)
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Name = "leaderstats"
+	leaderstats.Parent = player
+
+	local clicks = Instance.new("IntValue")
+	clicks.Name = "Clicks"
+	clicks.Value = 0
+	clicks.Parent = leaderstats
+
+	local rebirths = Instance.new("IntValue")
+	rebirths.Name = "Rebirths"
+	rebirths.Value = 0
+	rebirths.Parent = leaderstats
+
+	local multiplier = Instance.new("IntValue")
+	multiplier.Name = "ClicksToAdd"
+	multiplier.Parent = player
+	multiplier.Value = DEFAULT_MULTIPLIER
+
+	local reqPoints = Instance.new("IntValue")
+	reqPoints.Name = "ClicksNeeded"
+	reqPoints.Parent = player
+	reqPoints.Value = DEFAULT_REQ_POINTS
+	
+	local clickIndex = Instance.new("IntValue")
+	clickIndex.Name = "ClickProgress"
+	clickIndex.Value = 1 -- start at step 1
+	clickIndex.Parent = player
+	
+	local clickIndex = Instance.new("IntValue")
+	clickIndex.Name = "ClickProgress1"
+	clickIndex.Value = 1 -- start at step 1
+	clickIndex.Parent = player
+
+	local title = Instance.new("StringValue")
+	title.Name = "Title"
+	title.Value = DEFAULT_TITLE
+	title.Parent = player
+
+	-- Load all saved data
+	task.spawn(function()
+		local userId = tostring(player.UserId)
+
+		local success1, savedMultiplier = pcall(function()
+			return MultiplierStore:GetAsync(userId)
+		end)
+		if success1 and savedMultiplier then
+			multiplier.Value = savedMultiplier
+		end
+
+		local success2, savedReqPoints = pcall(function()
+			return ReqPointsStore:GetAsync(userId)
+		end)
+		if success2 and savedReqPoints then
+			reqPoints.Value = savedReqPoints
+		end
+
+		local success3, savedClicks = pcall(function()
+			return ClicksStore:GetAsync(userId)
+		end)
+		if success3 and savedClicks then
+			clicks.Value = savedClicks
+		end
+
+		local success4, savedRebirths = pcall(function()
+			return RebirthsStore:GetAsync(userId)
+		end)
+		if success4 and savedRebirths then
+			rebirths.Value = savedRebirths
+		end
+
+		local success5, ownedTitlesJSON = pcall(function()
+			return OwnedTitlesStore:GetAsync(userId)
+		end)
+		if success5 and ownedTitlesJSON then
+			player:SetAttribute("OwnedTitles", ownedTitlesJSON)
+		else
+			player:SetAttribute("OwnedTitles", HttpService:JSONEncode({}))
+		end
+
+		local success6, equippedTitle = pcall(function()
+			return EquippedTitleStore:GetAsync(userId)
+		end)
+		if success6 and equippedTitle then
+			title.Value = equippedTitle
+		end
+
+		print("✅ Data loaded for", player.Name)
+	end)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	local userId = tostring(player.UserId)
+
+	local clicks = player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Clicks") and player.leaderstats.Clicks.Value or 0
+	local rebirths = player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Rebirths") and player.leaderstats.Rebirths.Value or 0
+	local multiplier = player:FindFirstChild("ClicksToAdd") and player.ClicksToAdd.Value or DEFAULT_MULTIPLIER
+	local reqPoints = player:FindFirstChild("ClicksNeeded") and player.ClicksNeeded.Value or DEFAULT_REQ_POINTS
+	local ownedTitlesJSON = player:GetAttribute("OwnedTitles")
+	local equippedTitle = player:FindFirstChild("Title") and player.Title.Value or DEFAULT_TITLE
+
+	-- Save in parallel
+	task.spawn(function()
+		pcall(function()
+			ClicksStore:UpdateAsync(userId, function()
+				return clicks
+			end)
+		end)
+
+		pcall(function()
+			RebirthsStore:UpdateAsync(userId, function()
+				return rebirths
+			end)
+		end)
+
+		pcall(function()
+			MultiplierStore:UpdateAsync(userId, function()
+				return multiplier
+			end)
+		end)
+
+		pcall(function()
+			ReqPointsStore:UpdateAsync(userId, function()
+				return reqPoints
+			end)
+		end)
+
+		if ownedTitlesJSON then
+			pcall(function()
+				OwnedTitlesStore:SetAsync(userId, ownedTitlesJSON)
+			end)
+		end
+
+		pcall(function()
+			EquippedTitleStore:SetAsync(userId, equippedTitle)
+		end)
+	end)
+
+	print("💾 Data saved for", player.Name)
+end)
